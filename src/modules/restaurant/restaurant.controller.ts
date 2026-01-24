@@ -1,5 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 import Restaurant from './restaurant.model.js';
+import { getPresignedUrl, deleteFileFromS3 } from '../../utils/s3.js';
+
+/**
+ * Helper to presign all restaurant URLs
+ */
+const presignRestaurant = async (restaurant: any) => {
+  const r = restaurant.toObject ? restaurant.toObject() : restaurant;
+  
+  if (r.image) r.image = await getPresignedUrl(r.image);
+  
+  if (r.legalDocs) {
+    if (r.legalDocs.fssaiCertificateUrl) r.legalDocs.fssaiCertificateUrl = await getPresignedUrl(r.legalDocs.fssaiCertificateUrl);
+    if (r.legalDocs.gstCertificateUrl) r.legalDocs.gstCertificateUrl = await getPresignedUrl(r.legalDocs.gstCertificateUrl);
+    if (r.legalDocs.tradeLicenseUrl) r.legalDocs.tradeLicenseUrl = await getPresignedUrl(r.legalDocs.tradeLicenseUrl);
+    if (r.legalDocs.healthCertificateUrl) r.legalDocs.healthCertificateUrl = await getPresignedUrl(r.legalDocs.healthCertificateUrl);
+  }
+  
+  return r;
+};
 
 // @desc    Create new restaurant
 // @route   POST /api/v1/restaurants
@@ -13,9 +32,11 @@ export const createRestaurant = async (req: Request, res: Response, next: NextFu
 
     const restaurant = await Restaurant.create(req.body);
 
+    const data = await presignRestaurant(restaurant);
+
     res.status(201).json({
       success: true,
-      data: restaurant,
+      data,
     });
   } catch (error) {
     next(error);
@@ -27,7 +48,11 @@ export const createRestaurant = async (req: Request, res: Response, next: NextFu
 // @access  Private/Owner
 export const getMyRestaurants = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const restaurants = await Restaurant.find({ owner: req.user!._id });
+    const rawRestaurants = await Restaurant.find({ owner: req.user!._id });
+    
+    const restaurants = await Promise.all(
+      rawRestaurants.map(restaurant => presignRestaurant(restaurant))
+    );
 
     res.status(200).json({
       success: true,
@@ -50,14 +75,11 @@ export const updateRestaurant = async (req: Request, res: Response, next: NextFu
       return res.status(404).json({ success: false, message: 'Restaurant not found' });
     }
 
-    // Make sure user is owner
     if (restaurant.owner.toString() !== req.user!._id.toString()) {
       return res.status(401).json({ success: false, message: 'Not authorized to update this restaurant' });
     }
 
-    // If status is being updated to pending, it means owner is submitting for verification
     if (req.body.status && req.body.status === 'pending') {
-      // Validate if required legal docs are present before allowing submission
       if (!restaurant.legalDocs.fssaiLicenseNumber) {
         return res.status(400).json({ success: false, message: 'FSSAI License Number is required for verification' });
       }
@@ -68,9 +90,11 @@ export const updateRestaurant = async (req: Request, res: Response, next: NextFu
       runValidators: true,
     });
 
+    const data = await presignRestaurant(restaurant!);
+
     res.status(200).json({
       success: true,
-      data: restaurant,
+      data,
     });
   } catch (error) {
     next(error);
@@ -88,12 +112,10 @@ export const submitForVerification = async (req: Request, res: Response, next: N
       return res.status(404).json({ success: false, message: 'Restaurant not found' });
     }
 
-    // Make sure user is owner
     if (restaurant.owner.toString() !== req.user!._id.toString()) {
       return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
-    // Check if legal docs are present
     if (!restaurant.legalDocs.fssaiLicenseNumber) {
         return res.status(400).json({ success: false, message: 'FSSAI License Number is required for verification' });
     }
@@ -101,10 +123,12 @@ export const submitForVerification = async (req: Request, res: Response, next: N
     restaurant.status = 'pending';
     await restaurant.save();
 
+    const data = await presignRestaurant(restaurant);
+
     res.status(200).json({
       success: true,
       message: 'Restaurant submitted for verification',
-      data: restaurant,
+      data,
     });
   } catch (error) {
     next(error);
@@ -122,9 +146,11 @@ export const getRestaurant = async (req: Request, res: Response, next: NextFunct
       return res.status(404).json({ success: false, message: 'Restaurant not found' });
     }
 
+    const data = await presignRestaurant(restaurant);
+
     res.status(200).json({
       success: true,
-      data: restaurant,
+      data,
     });
   } catch (error) {
     next(error);
@@ -142,9 +168,19 @@ export const deleteRestaurant = async (req: Request, res: Response, next: NextFu
       return res.status(404).json({ success: false, message: 'Restaurant not found' });
     }
 
-    // Make sure user is owner
     if (restaurant.owner.toString() !== req.user!._id.toString()) {
       return res.status(401).json({ success: false, message: 'Not authorized to delete this restaurant' });
+    }
+
+    const filesToDelete = [];
+    if (restaurant.image) filesToDelete.push(restaurant.image);
+    if (restaurant.legalDocs.fssaiCertificateUrl) filesToDelete.push(restaurant.legalDocs.fssaiCertificateUrl);
+    if (restaurant.legalDocs.gstCertificateUrl) filesToDelete.push(restaurant.legalDocs.gstCertificateUrl);
+    if (restaurant.legalDocs.tradeLicenseUrl) filesToDelete.push(restaurant.legalDocs.tradeLicenseUrl);
+    if (restaurant.legalDocs.healthCertificateUrl) filesToDelete.push(restaurant.legalDocs.healthCertificateUrl);
+
+    if (filesToDelete.length > 0) {
+      await Promise.all(filesToDelete.map(url => deleteFileFromS3(url)));
     }
 
     await restaurant.deleteOne();

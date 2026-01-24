@@ -1,6 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import MenuItem from './menuItem.model.js';
 import Restaurant from '../restaurant/restaurant.model.js';
+import { getPresignedUrl, deleteFileFromS3 } from '../../utils/s3.js';
+
+/**
+ * Helper to presign menu item image
+ */
+const presignMenuItem = async (menuItem: any) => {
+  const m = menuItem.toObject ? menuItem.toObject() : menuItem;
+  if (m.image) m.image = await getPresignedUrl(m.image);
+  return m;
+};
 
 // @desc    Create menu item (Global pool for owner)
 // @route   POST /api/v1/menu
@@ -10,10 +20,11 @@ export const createMenuItem = async (req: Request, res: Response, next: NextFunc
     req.body.owner = req.user!._id;
 
     const menuItem = await MenuItem.create(req.body);
+    const data = await presignMenuItem(menuItem);
 
     res.status(201).json({
       success: true,
-      data: menuItem,
+      data,
     });
   } catch (error) {
     next(error);
@@ -25,7 +36,11 @@ export const createMenuItem = async (req: Request, res: Response, next: NextFunc
 // @access  Private/Owner
 export const getMyMenuItems = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const menuItems = await MenuItem.find({ owner: req.user!._id }).populate('restaurants', 'name');
+    const rawMenuItems = await MenuItem.find({ owner: req.user!._id }).populate('restaurants', 'name');
+    
+    const menuItems = await Promise.all(
+      rawMenuItems.map(item => presignMenuItem(item))
+    );
 
     res.status(200).json({
       success: true,
@@ -52,9 +67,8 @@ export const assignItemToRestaurants = async (req: Request, res: Response, next:
       return res.status(401).json({ success: false, message: 'Not authorized' });
     }
 
-    const { restaurantIds } = req.body; // Expecting array of restaurant IDs
+    const { restaurantIds } = req.body;
 
-    // Verify all restaurants belong to this owner
     const restaurants = await Restaurant.find({
       _id: { $in: restaurantIds },
       owner: req.user!._id,
@@ -67,9 +81,11 @@ export const assignItemToRestaurants = async (req: Request, res: Response, next:
     menuItem.restaurants = restaurantIds;
     await menuItem.save();
 
+    const data = await presignMenuItem(menuItem);
+
     res.status(200).json({
       success: true,
-      data: menuItem,
+      data,
     });
   } catch (error) {
     next(error);
@@ -81,10 +97,14 @@ export const assignItemToRestaurants = async (req: Request, res: Response, next:
 // @access  Public
 export const getRestaurantMenu = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const menuItems = await MenuItem.find({
+    const rawMenuItems = await MenuItem.find({
       restaurants: req.params.restaurantId,
       isActive: true,
     });
+
+    const menuItems = await Promise.all(
+      rawMenuItems.map(item => presignMenuItem(item))
+    );
 
     res.status(200).json({
       success: true,
@@ -116,9 +136,11 @@ export const updateMenuItem = async (req: Request, res: Response, next: NextFunc
       runValidators: true,
     });
 
+    const data = await presignMenuItem(menuItem);
+
     res.status(200).json({
       success: true,
-      data: menuItem,
+      data,
     });
   } catch (error) {
     next(error);
@@ -138,6 +160,10 @@ export const deleteMenuItem = async (req: Request, res: Response, next: NextFunc
 
     if (menuItem.owner.toString() !== req.user!._id.toString()) {
       return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
+    if (menuItem.image) {
+      await deleteFileFromS3(menuItem.image);
     }
 
     await menuItem.deleteOne();

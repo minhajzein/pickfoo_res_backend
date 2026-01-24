@@ -1,15 +1,8 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import crypto from 'crypto';
 import multer from 'multer';
-
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION!,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+import { getS3Client, deleteFileFromS3, getPresignedUrl } from '../../utils/s3.js';
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
@@ -53,15 +46,19 @@ export const uploadFile = async (req: Request, res: Response, next: NextFunction
       // ACL: 'public-read', // Removed as bucket does not allow ACLs
     });
 
-    await s3Client.send(command);
+    await getS3Client().send(command);
 
     // Generate public URL
-    const fileUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${uniqueFileName}`;
+    const staticUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${uniqueFileName}`;
+    
+    // Generate a presigned URL for the frontend to display immediately
+    const fileUrl = await getPresignedUrl(staticUrl);
 
     res.status(200).json({
       success: true,
       data: {
         fileUrl,
+        staticUrl, // Keep reference to static URL for database storage
         fileName: file.originalname,
         fileSize: file.size,
         fileType: file.mimetype,
@@ -80,20 +77,7 @@ export const deleteFile = async (req: Request, res: Response, next: NextFunction
       return res.status(400).json({ success: false, message: 'File URL is required' });
     }
 
-    // Extract Key from URL
-    // URL format: https://bucket-name.s3.region.amazonaws.com/folder/filename.ext
-    const urlParts = fileUrl.split('.amazonaws.com/');
-    if (urlParts.length !== 2) {
-        return res.status(400).json({ success: false, message: 'Invalid file URL' });
-    }
-    const key = urlParts[1];
-
-    const command = new DeleteObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME!,
-      Key: key,
-    });
-
-    await s3Client.send(command);
+    await deleteFileFromS3(fileUrl);
 
     res.status(200).json({
       success: true,
