@@ -16,11 +16,14 @@ dotenv.config();
 // Connect to Database
 connectDB();
 
+import { initCronJobs } from './tasks/restaurantSchedule.js';
+initCronJobs();
+
 const app: Express = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: [process.env.CLIENT_URL || 'http://localhost:3000', 'https://restaurant.pickfoo.in', 'http://localhost:3001', 'http://localhost:3002'],
+    origin: [process.env.CLIENT_URL || 'http://localhost:3000', 'https://restaurant.pickfoo.in', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
     credentials: true,
   }
 });
@@ -67,7 +70,7 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
 // Middleware
 app.use(helmet());
-app.use(cors({ origin: [process.env.CLIENT_URL || 'http://localhost:3000', 'https://restaurant.pickfoo.in', 'http://localhost:3001', 'http://localhost:3002'], credentials: true }));
+app.use(cors({ origin: [process.env.CLIENT_URL || 'http://localhost:3000', 'https://restaurant.pickfoo.in', 'http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://localhost:3002'], credentials: true }));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

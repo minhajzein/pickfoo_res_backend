@@ -85,6 +85,17 @@ export const updateRestaurant = async (req: Request, res: Response, next: NextFu
       }
     }
 
+    // If isOpen is being explicitly updated, set manual override to true
+    if (req.body.isOpen !== undefined && req.body.isOpen !== restaurant.isOpen) {
+      req.body.isManualOverride = true;
+    }
+
+    // Allow resetting the manual override
+    if (req.body.resetOverride) {
+      req.body.isManualOverride = false;
+      delete req.body.resetOverride;
+    }
+
     restaurant = await Restaurant.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,

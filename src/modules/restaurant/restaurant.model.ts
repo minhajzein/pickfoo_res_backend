@@ -37,6 +37,13 @@ export interface IRestaurant extends Document {
   rating: number;
   numReviews: number;
   isOpen: boolean;
+  isManualOverride: boolean;
+  openingHours: {
+    day: number; // 0 for Sunday, 1 for Monday, etc.
+    openTime: string; // HH:mm
+    closeTime: string; // HH:mm
+    isClosed: boolean;
+  }[];
 }
 
 const restaurantSchema = new Schema<IRestaurant>(
@@ -110,6 +117,18 @@ const restaurantSchema = new Schema<IRestaurant>(
       type: Boolean,
       default: false,
     },
+    isManualOverride: {
+      type: Boolean,
+      default: false,
+    },
+    openingHours: [
+      {
+        day: { type: Number, required: true },
+        openTime: { type: String, default: '09:00' },
+        closeTime: { type: String, default: '22:00' },
+        isClosed: { type: Boolean, default: false },
+      },
+    ],
   },
   {
     timestamps: true,
