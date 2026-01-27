@@ -125,6 +125,20 @@ export const submitForVerification = async (req: Request, res: Response, next: N
 
     const data = await presignRestaurant(restaurant);
 
+    // Notify Admin Backend
+    try {
+      // @ts-ignore
+      const userName = req.user?.name || 'An Owner';
+      fetch(`${process.env.ADMIN_BACKEND_URL || 'http://localhost:5001'}/api/v1/notify/new-restaurant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantName: restaurant.name,
+          ownerName: userName
+        })
+      }).catch(err => console.error('Failed to notify admin:', err.message));
+    } catch (e) { console.error(e); }
+
     res.status(200).json({
       success: true,
       message: 'Restaurant submitted for verification',
