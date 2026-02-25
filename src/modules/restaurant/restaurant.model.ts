@@ -52,6 +52,7 @@ const restaurantSchema = new Schema<IRestaurant>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+      unique: true, // One restaurant per owner
     },
     name: {
       type: String,

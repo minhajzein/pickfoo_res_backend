@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   createRestaurant,
   getMyRestaurants,
+  getMyRestaurant,
   getRestaurant,
   updateRestaurant,
   submitForVerification,
@@ -16,6 +17,7 @@ router
   .post(protect, authorize('owner'), createRestaurant);
 
 router.get('/my-restaurants', protect, authorize('owner'), getMyRestaurants);
+router.get('/my-restaurant', protect, authorize('owner'), getMyRestaurant);
 
 router
   .route('/:id')

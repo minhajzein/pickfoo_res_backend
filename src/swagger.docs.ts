@@ -155,7 +155,8 @@
  * @swagger
  * /api/v1/restaurants:
  *   post:
- *     summary: Create restaurant (owner only)
+ *     summary: Create restaurant (owner only, one per owner)
+ *     description: An owner can only have one restaurant. Returns 400 if they already have one.
  *     tags: [Restaurants]
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -173,19 +174,32 @@
  *               openingHours: { type: object }
  *     responses:
  *       201: { description: Restaurant created }
+ *       400: { description: Owner already has a restaurant }
  *       401: { description: Not authorized }
  */
 /**
  * @swagger
  * /api/v1/restaurants/my-restaurants:
  *   get:
- *     summary: Get current owner's restaurants
+ *     summary: Get current owner's restaurant (0 or 1 item)
+ *     description: Returns array with at most one restaurant. Use for backward compatibility.
  *     tags: [Restaurants]
  *     security: [{ bearerAuth: [] }]
  *     responses:
- *       200: { description: List of restaurants }
+ *       200: { description: List of restaurants (0 or 1 item) }
  *       401: { description: Not authorized }
  */
+/**
+ * @swagger
+ * /api/v1/restaurants/my-restaurant:
+ *   get:
+ *     summary: Get current owner's single restaurant
+ *     description: Returns the owner's restaurant or null if none. Use for dashboard.
+ *     tags: [Restaurants]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Single restaurant object or data null }
+ *       401: { description: Not authorized }
 /**
  * @swagger
  * /api/v1/restaurants/{id}:

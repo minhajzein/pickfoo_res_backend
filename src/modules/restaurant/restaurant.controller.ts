@@ -20,11 +20,19 @@ const presignRestaurant = async (restaurant: any) => {
   return r;
 };
 
-// @desc    Create new restaurant
+// @desc    Create new restaurant (one per owner)
 // @route   POST /api/v1/restaurants
 // @access  Private/Owner
 export const createRestaurant = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const existing = await Restaurant.findOne({ owner: req.user!._id });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'An owner can only have one restaurant. Update your existing restaurant instead.',
+      });
+    }
+
     req.body.owner = req.user!._id;
     
     // Initial status is inactive until legal papers are complete and submitted for review
@@ -39,25 +47,57 @@ export const createRestaurant = async (req: Request, res: Response, next: NextFu
       data,
     });
   } catch (error) {
+    // Duplicate key (owner already has restaurant) from unique index
+    if ((error as any)?.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'An owner can only have one restaurant. Update your existing restaurant instead.',
+      });
+    }
     next(error);
   }
 };
 
-// @desc    Get all restaurants for current owner
+// @desc    Get current owner's restaurant (one per owner)
 // @route   GET /api/v1/restaurants/my-restaurants
 // @access  Private/Owner
 export const getMyRestaurants = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rawRestaurants = await Restaurant.find({ owner: req.user!._id });
+    const restaurant = await Restaurant.findOne({ owner: req.user!._id });
     
-    const restaurants = await Promise.all(
-      rawRestaurants.map(restaurant => presignRestaurant(restaurant))
-    );
+    // Return array for backward compatibility: 0 or 1 item
+    const list = restaurant ? [await presignRestaurant(restaurant)] : [];
 
     res.status(200).json({
       success: true,
-      count: restaurants.length,
-      data: restaurants,
+      count: list.length,
+      data: list,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get current owner's single restaurant (convenience for dashboard)
+// @route   GET /api/v1/restaurants/my-restaurant
+// @access  Private/Owner
+export const getMyRestaurant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const restaurant = await Restaurant.findOne({ owner: req.user!._id });
+
+    if (!restaurant) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+        message: 'No restaurant created yet',
+      });
+    }
+
+    const data = await presignRestaurant(restaurant);
+
+    res.status(200).json({
+      success: true,
+      data,
     });
   } catch (error) {
     next(error);
