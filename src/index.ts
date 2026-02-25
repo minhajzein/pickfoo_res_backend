@@ -48,9 +48,9 @@ const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'PickFoo API',
+      title: 'PickFoo Restaurant API',
       version: '1.0.0',
-      description: 'API Documentation for PickFoo Food Delivery App',
+      description: 'API documentation for PickFoo Restaurant Backend. Use Bearer token (from login) or cookies for protected routes.',
     },
     servers: [
       {
@@ -63,7 +63,7 @@ const swaggerOptions = {
       },
     ],
   },
-  apis: ['./src/modules/**/*.ts'], // Path to the API docs
+  apis: ['./src/swagger.docs.ts'],
 };
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);

@@ -13,6 +13,7 @@ export interface IMenuItem extends Document {
   category: string;
   isVeg: boolean;
   isActive: boolean;
+  ingredients: string[];
   restaurants: mongoose.Types.ObjectId[]; // Linked to multiple restaurants
 }
 
@@ -58,6 +59,10 @@ const menuItemSchema = new Schema<IMenuItem>(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    ingredients: {
+      type: [String],
+      default: [],
     },
     restaurants: [
       {
