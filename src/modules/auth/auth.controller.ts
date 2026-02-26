@@ -44,6 +44,7 @@ const sendTokenResponse = (user: any, statusCode: number, res: ExpressResponse) 
     .cookie('refreshToken', refreshToken, refreshCookieOptions)
     .json({
       success: true,
+      accessToken, // for script/API clients that cannot use cookies
       user: {
         id: user._id,
         name: user.name,

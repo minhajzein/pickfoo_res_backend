@@ -1,26 +1,7 @@
 /**
  * Central Swagger/OpenAPI documentation for PickFoo Restaurant API.
  * All endpoints are listed here for /api-docs.
- */
-
-/**
- * @swagger
- * components:
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
- *       description: Access token from login (or use cookie accessToken)
- *   schemas:
- *     User:
- *       type: object
- *       properties:
- *         id: { type: string }
- *         name: { type: string }
- *         email: { type: string }
- *         role: { type: string, enum: [owner, admin] }
- *         profilePicture: { type: string }
+ * (components/securitySchemes are defined in index.ts)
  */
 
 // ==================== Health ====================
@@ -200,6 +181,7 @@
  *     responses:
  *       200: { description: Single restaurant object or data null }
  *       401: { description: Not authorized }
+ */
 /**
  * @swagger
  * /api/v1/restaurants/{id}:

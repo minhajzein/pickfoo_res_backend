@@ -28,7 +28,7 @@ export const deleteFileFromS3 = async (fileUrl: string) => {
       console.warn(`Invalid S3 URL: ${fileUrl}`);
       return;
     }
-    const key = urlParts[1];
+    const key = urlParts[1].split('?')[0]; // strip query string (e.g. presigned params)
 
     const client = getS3Client();
     const command = new DeleteObjectCommand({
@@ -54,7 +54,7 @@ export const getPresignedUrl = async (fileUrl: string) => {
     const urlParts = fileUrl.split('.amazonaws.com/');
     if (urlParts.length !== 2) return fileUrl;
     
-    const key = urlParts[1];
+    const key = urlParts[1].split('?')[0]; // strip query string (presigned params)
     const client = getS3Client();
     
     const command = new GetObjectCommand({

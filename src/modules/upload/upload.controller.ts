@@ -21,13 +21,32 @@ const upload = multer({
   },
 });
 
-export const uploadMiddleware: RequestHandler = upload.single('file');
+export const uploadMiddleware: RequestHandler = (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ success: false, message: 'File too large. Max size is 5MB.' });
+        }
+        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+          return res.status(400).json({ success: false, message: 'Unexpected field. Use field name "file" for the upload.' });
+        }
+      }
+      return res.status(400).json({ success: false, message: err.message || 'Upload failed' });
+    }
+    next();
+  });
+};
 
 export const uploadFile = async (req: Request, res: Response, next: NextFunction) => {
   try {
 
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
+      return res.status(400).json({ success: false, message: 'No file uploaded. Send multipart/form-data with field name "file".' });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      return res.status(503).json({ success: false, message: 'File upload is not configured (S3_BUCKET_NAME missing).' });
     }
 
     const { folder = 'general' } = req.body;
@@ -74,7 +93,11 @@ export const deleteFile = async (req: Request, res: Response, next: NextFunction
     const { fileUrl } = req.body;
 
     if (!fileUrl) {
-      return res.status(400).json({ success: false, message: 'File URL is required' });
+      return res.status(400).json({ success: false, message: 'File URL is required in request body (JSON).' });
+    }
+
+    if (!process.env.S3_BUCKET_NAME) {
+      return res.status(503).json({ success: false, message: 'File delete is not configured (S3_BUCKET_NAME missing).' });
     }
 
     await deleteFileFromS3(fileUrl);

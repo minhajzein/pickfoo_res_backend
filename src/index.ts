@@ -62,6 +62,28 @@ const swaggerOptions = {
         description: 'Production server',
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Access token from login (or use cookie accessToken)',
+        },
+      },
+      schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            email: { type: 'string' },
+            role: { type: 'string', enum: ['owner', 'admin'] },
+            profilePicture: { type: 'string' },
+          },
+        },
+      },
+    },
   },
   apis: ['./src/swagger.docs.ts'],
 };
