@@ -6,6 +6,7 @@ export interface IMenuItem extends Document {
   description: string;
   price: number;
   type: 'breakfast' | 'lunch' | 'dinner';
+  preparationTime: number;
   variants: {
     name: string;
     price: number;
@@ -44,6 +45,11 @@ const menuItemSchema = new Schema<IMenuItem>(
       enum: ['breakfast', 'lunch', 'dinner'],
       default: 'lunch',
       required: [true, 'Please provide item type'],
+    },
+    preparationTime: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     variants: [
       {
