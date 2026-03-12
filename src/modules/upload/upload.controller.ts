@@ -67,17 +67,26 @@ export const uploadFile = async (req: Request, res: Response, next: NextFunction
 
     await getS3Client().send(command);
 
-    // Generate public URL
-    const staticUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${uniqueFileName}`;
-    
-    // Generate a presigned URL for the frontend to display immediately
-    const fileUrl = await getPresignedUrl(staticUrl);
+    // Generate a stable, non-expiring URL for storage/display.
+    // IMPORTANT: This URL will only work without expiry if your bucket/object is publicly readable
+    // OR if you are using CloudFront/public CDN domain that can serve the object.
+    const publicBase =
+      process.env.S3_PUBLIC_BASE_URL ||
+      process.env.CLOUDFRONT_URL ||
+      `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com`;
+
+    const staticUrl = `${publicBase.replace(/\/+$/, '')}/${uniqueFileName}`;
+
+    // Presigned URL is optional (useful for private buckets), but it WILL expire.
+    // We keep returning it under a separate field so clients don't accidentally store it.
+    const presignedUrl = await getPresignedUrl(staticUrl);
 
     res.status(200).json({
       success: true,
       data: {
-        fileUrl,
-        staticUrl, // Keep reference to static URL for database storage
+        fileUrl: staticUrl, // Backward compatible: always return stable URL here
+        staticUrl, // Stable URL for database storage
+        presignedUrl, // Expiring URL (only use for immediate preview if needed)
         fileName: file.originalname,
         fileSize: file.size,
         fileType: file.mimetype,

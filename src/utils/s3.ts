@@ -23,12 +23,12 @@ export const deleteFileFromS3 = async (fileUrl: string) => {
   try {
     if (!fileUrl) return;
 
-    const urlParts = fileUrl.split('.amazonaws.com/');
-    if (urlParts.length !== 2) {
-      console.warn(`Invalid S3 URL: ${fileUrl}`);
+    const u = new URL(fileUrl);
+    const key = u.pathname.replace(/^\/+/, '').split('?')[0];
+    if (!key) {
+      console.warn(`Invalid file URL: ${fileUrl}`);
       return;
     }
-    const key = urlParts[1].split('?')[0]; // strip query string (e.g. presigned params)
 
     const client = getS3Client();
     const command = new DeleteObjectCommand({
@@ -51,10 +51,13 @@ export const getPresignedUrl = async (fileUrl: string) => {
     
     if (fileUrl.includes('X-Amz-Signature')) return fileUrl;
 
-    const urlParts = fileUrl.split('.amazonaws.com/');
-    if (urlParts.length !== 2) return fileUrl;
-    
-    const key = urlParts[1].split('?')[0]; // strip query string (presigned params)
+    // Support:
+    // - https://bucket.s3.region.amazonaws.com/<key>
+    // - https://<cdn-domain>/<key>   (when S3_PUBLIC_BASE_URL/CLOUDFRONT_URL is used)
+    const u = new URL(fileUrl);
+    const key = u.pathname.replace(/^\/+/, '').split('?')[0];
+    if (!key) return fileUrl;
+
     const client = getS3Client();
     
     const command = new GetObjectCommand({
