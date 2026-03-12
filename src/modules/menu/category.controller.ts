@@ -19,12 +19,14 @@ export const createCategory = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-// @desc    Get all categories for owner
+// @desc    Get all categories (shared across owners)
 // @route   GET /api/v1/menu/categories
 // @access  Private/Owner
 export const getMyCategories = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const categories = await Category.find({ owner: req.user!._id });
+    // Return all categories, regardless of owner, so every restaurant owner
+    // can see/use the same category list.
+    const categories = await Category.find().sort({ name: 1 });
 
     res.status(200).json({
       success: true,

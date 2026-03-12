@@ -12,12 +12,28 @@ const presignMenuItem = async (menuItem: any) => {
   return m;
 };
 
+/**
+ * Ensure base price is always the lowest variant price when variants are present.
+ */
+const applyVariantBasePrice = (body: any) => {
+  if (Array.isArray(body?.variants) && body.variants.length > 0) {
+    const numericPrices = body.variants
+      .map((v: any) => Number(v?.price))
+      .filter((p: number) => !Number.isNaN(p));
+    if (numericPrices.length > 0) {
+      body.price = Math.min(...numericPrices);
+    }
+  }
+  return body;
+};
+
 // @desc    Create menu item (Global pool for owner)
 // @route   POST /api/v1/menu
 // @access  Private/Owner
 export const createMenuItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
     req.body.owner = req.user!._id;
+    applyVariantBasePrice(req.body);
 
     const menuItem = await MenuItem.create(req.body);
     const data = await presignMenuItem(menuItem);
@@ -130,6 +146,7 @@ export const updateMenuItem = async (req: Request, res: Response, next: NextFunc
     if (menuItem.owner.toString() !== req.user!._id.toString()) {
       return res.status(401).json({ success: false, message: 'Not authorized' });
     }
+    applyVariantBasePrice(req.body);
 
     menuItem = await MenuItem.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
