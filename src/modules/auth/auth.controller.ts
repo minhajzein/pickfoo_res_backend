@@ -2,6 +2,7 @@ import { Request as ExpressRequest, Response as ExpressResponse, NextFunction } 
 import jwt, { Secret } from 'jsonwebtoken';
 import User from '../user/user.model.js';
 import PendingUser from '../user/pendingUser.model.js';
+import ProfileChange from '../user/profileChange.model.js';
 import { sendEmail, getOTPTemplate } from '../../utils/sendEmail.js';
 import crypto from 'crypto';
 
@@ -188,6 +189,134 @@ export const resendOTP = async (req: ExpressRequest, res: ExpressResponse, next:
       success: true,
       message: 'OTP resent to email',
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Request OTP for profile change (name/email/password/profilePicture)
+// @route   POST /api/v1/auth/profile-change/request-otp
+// @access  Private
+export const requestProfileChangeOTP = async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
+  try {
+    const userId = (req as any).user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
+    const { name, email, password, profilePicture } = req.body as {
+      name?: string;
+      email?: string;
+      password?: string;
+      profilePicture?: string;
+    };
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Validate requested email is not taken by someone else
+    if (email && email !== user.email) {
+      const existingEmail = await User.findOne({ email, _id: { $ne: user._id } });
+      if (existingEmail) {
+        return res.status(400).json({ success: false, message: 'Email is already in use' });
+      }
+    }
+
+    // Nothing to change
+    if (
+      (!name || name === user.name) &&
+      (!email || email === user.email) &&
+      !password &&
+      (!profilePicture || profilePicture === user.profilePicture)
+    ) {
+      return res.status(400).json({ success: false, message: 'No changes requested' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    await ProfileChange.findOneAndUpdate(
+      { user: user._id },
+      {
+        user: user._id,
+        pendingName: name && name !== user.name ? name : undefined,
+        pendingEmail: email && email !== user.email ? email : undefined,
+        pendingPassword: password || undefined,
+        pendingProfilePicture:
+          profilePicture && profilePicture !== user.profilePicture ? profilePicture : undefined,
+        otp: otpHash,
+        otpExpires: new Date(Date.now() + 10 * 60 * 1000),
+      },
+      { upsert: true, new: true }
+    );
+
+    try {
+      await sendEmail({
+        email: email || user.email,
+        subject: 'Profile Change Verification - PickFoo',
+        html: getOTPTemplate(otp, user.name),
+      });
+    } catch (error) {
+      console.error('Profile change email send failed:', error);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'OTP sent to your email. Please verify to apply changes.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Verify OTP and apply pending profile changes
+// @route   POST /api/v1/auth/profile-change/verify-otp
+// @access  Private
+export const verifyProfileChangeOTP = async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
+  try {
+    const userId = (req as any).user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
+    const { otp } = req.body as { otp?: string };
+    if (!otp) {
+      return res.status(400).json({ success: false, message: 'Please provide OTP' });
+    }
+
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    const pending = await ProfileChange.findOne({
+      user: userId,
+      otp: otpHash,
+      otpExpires: { $gt: new Date() },
+    });
+
+    if (!pending) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (pending.pendingName) user.name = pending.pendingName;
+    if (pending.pendingEmail) user.email = pending.pendingEmail;
+    if (pending.pendingProfilePicture !== undefined) {
+      user.profilePicture = pending.pendingProfilePicture;
+    }
+    if (pending.pendingPassword) {
+      user.password = pending.pendingPassword;
+    }
+
+    await user.save();
+    await ProfileChange.deleteOne({ _id: pending._id });
+
+    // Return fresh tokens + updated user
+    sendTokenResponse(user, 200, res);
   } catch (error) {
     next(error);
   }

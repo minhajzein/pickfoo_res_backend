@@ -112,6 +112,8 @@ import uploadRoutes from './modules/upload/upload.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import bankAccountRoutes from './modules/bankAccount/bankAccount.routes.js';
 import withdrawalRoutes from './modules/withdrawal/withdrawal.routes.js';
+import notificationRoutes from './modules/notification/notification.routes.js';
+import Notification from './modules/notification/notification.model.js';
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
@@ -123,24 +125,58 @@ app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/bank-accounts', bankAccountRoutes);
 app.use('/api/v1/withdrawals', withdrawalRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Notification route from Admin Backend
-app.post('/api/v1/notify/status-update', (req, res) => {
-  const { restaurantName, status, ownerId } = req.body;
+app.post('/api/v1/notify/status-update', async (req, res) => {
+  const { restaurantName, status, ownerId, restaurantId } = req.body as {
+    restaurantName?: string;
+    status?: string;
+    ownerId?: string;
+    restaurantId?: string;
+  };
   
-  if (!ownerId) {
-    res.status(400).json({ success: false });
+  if (!ownerId || !status) {
+    res.status(400).json({ success: false, message: 'ownerId and status are required' });
     return;
   }
 
-  // Emit to owner room
-  io.to(`owner_${ownerId}`).emit('restaurant-status-update', {
-    message: `Your restaurant "${restaurantName}" status has been updated to ${status}`,
-    status,
-    timestamp: new Date()
-  });
+  try {
+    // Persist notification so owner apps (web, mobile) can display history.
+    const notification = await Notification.create({
+      user: ownerId,
+      targetRole: 'owner',
+      type: 'restaurant_status',
+      title: 'Restaurant Status Update',
+      message: `Your restaurant "${restaurantName ?? ''}" status has been updated to ${status}`,
+      restaurant: restaurantId,
+      metadata: { status, restaurantName },
+    });
 
-  res.status(200).json({ success: true });
+    const payload = {
+      id: notification._id.toString(),
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      status,
+      createdAt: notification.createdAt,
+    };
+
+    // Emit generic notification event
+    io.to(`owner_${ownerId}`).emit('notification:new', payload);
+
+    // Backwards-compatible event for existing web owner client
+    io.to(`owner_${ownerId}`).emit('restaurant-status-update', {
+      message: payload.message,
+      status,
+      timestamp: notification.createdAt,
+    });
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Failed to create status notification', error);
+    res.status(500).json({ success: false, message: 'Failed to send notification' });
+  }
 });
 
 // Health Check
