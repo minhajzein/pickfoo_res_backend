@@ -109,6 +109,7 @@ import orderRoutes from './modules/order/order.routes.js';
 import reviewRoutes from './modules/review/review.routes.js';
 import transactionRoutes from './modules/transaction/transaction.routes.js';
 import uploadRoutes from './modules/upload/upload.routes.js';
+import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
@@ -117,6 +118,7 @@ app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/upload', uploadRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 
 // Notification route from Admin Backend
 app.post('/api/v1/notify/status-update', (req, res) => {
