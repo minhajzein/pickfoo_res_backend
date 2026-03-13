@@ -110,6 +110,8 @@ import reviewRoutes from './modules/review/review.routes.js';
 import transactionRoutes from './modules/transaction/transaction.routes.js';
 import uploadRoutes from './modules/upload/upload.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+import bankAccountRoutes from './modules/bankAccount/bankAccount.routes.js';
+import withdrawalRoutes from './modules/withdrawal/withdrawal.routes.js';
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
@@ -119,6 +121,8 @@ app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/bank-accounts', bankAccountRoutes);
+app.use('/api/v1/withdrawals', withdrawalRoutes);
 
 // Notification route from Admin Backend
 app.post('/api/v1/notify/status-update', (req, res) => {

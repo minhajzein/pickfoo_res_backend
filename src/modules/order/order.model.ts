@@ -12,9 +12,11 @@ export interface IOrder extends Document {
   restaurant: mongoose.Types.ObjectId;
   items: IOrderItem[];
   totalAmount: number;
-  status: 'pending' | 'confirmed' | 'preparing' | 'out-for-delivery' | 'delivered' | 'cancelled';
+  /** pickup = Pickfoo delivery partner picks up; delivery = restaurant's delivery boy delivers */
+  orderType: 'pickup' | 'delivery';
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'out-for-delivery' | 'delivered' | 'cancelled';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
-  paymentMethod: 'cash_on_delivery' | 'online';
+  paymentMethod: 'online';
   deliveryAddress: string;
   transactionId?: string;
   orderDate: Date;
@@ -44,9 +46,14 @@ const orderSchema = new Schema<IOrder>(
       type: Number,
       required: true,
     },
+    orderType: {
+      type: String,
+      enum: ['pickup', 'delivery'],
+      default: 'delivery',
+    },
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'preparing', 'out-for-delivery', 'delivered', 'cancelled'],
+      enum: ['pending', 'confirmed', 'preparing', 'ready', 'out-for-delivery', 'delivered', 'cancelled'],
       default: 'pending',
     },
     paymentStatus: {
@@ -56,8 +63,8 @@ const orderSchema = new Schema<IOrder>(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash_on_delivery', 'online'],
-      required: true,
+      enum: ['online'],
+      default: 'online',
     },
     deliveryAddress: {
       type: String,

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import Category from './category.model.js';
+import MenuItem from './menuItem.model.js';
 
 // @desc    Create category
 // @route   POST /api/v1/menu/categories
@@ -67,7 +68,7 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-// @desc    Delete category
+// @desc    Delete category (rejected if any menu item uses this category)
 // @route   DELETE /api/v1/menu/categories/:id
 // @access  Private/Owner
 export const deleteCategory = async (req: Request, res: Response, next: NextFunction) => {
@@ -80,6 +81,23 @@ export const deleteCategory = async (req: Request, res: Response, next: NextFunc
 
     if (category.owner.toString() !== req.user!._id.toString()) {
       return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
+    // Menu items store category as string (name or id); block delete if in use by any owner
+    const categoryIdStr = category._id.toString();
+    const categoryName = category.name;
+    const inUse = await MenuItem.exists({
+      $or: [
+        { category: categoryIdStr },
+        { category: categoryName },
+      ],
+    });
+
+    if (inUse) {
+      return res.status(400).json({
+        success: false,
+        message: 'Category is already in use by menu items. Remove or change category from those items first.',
+      });
     }
 
     await category.deleteOne();

@@ -3,7 +3,7 @@ import Restaurant from '../restaurant/restaurant.model.js';
 import Order from '../order/order.model.js';
 import Review from '../review/review.model.js';
 
-const RUNNING_STATUSES = ['confirmed', 'preparing', 'out-for-delivery'] as const;
+const RUNNING_STATUSES = ['confirmed', 'preparing', 'ready', 'out-for-delivery'] as const;
 const PAID_STATUS = 'paid';
 
 function getDateRange(period: string): { start: Date; end: Date } {
