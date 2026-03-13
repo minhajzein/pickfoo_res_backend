@@ -63,7 +63,7 @@ export const getOrderById = async (req: Request, res: Response, next: NextFuncti
 // @access  Private/Owner
 export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status } = req.body as { status?: string };
+    const { status, orderType } = req.body as { status?: string; orderType?: string };
 
     if (!status || !OWNER_ALLOWED_STATUSES.includes(status as any)) {
       return res.status(400).json({
@@ -94,6 +94,17 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
         success: false,
         message: 'Invalid status transition for this order.',
       });
+    }
+
+    // If moving to PREPARING, owner can choose pickup or delivery inline.
+    if (status === 'preparing' && orderType) {
+      if (!['pickup', 'delivery'].includes(orderType)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid orderType. Use \"pickup\" or \"delivery\".',
+        });
+      }
+      order.orderType = orderType as 'pickup' | 'delivery';
     }
 
     order.status = status as any;
