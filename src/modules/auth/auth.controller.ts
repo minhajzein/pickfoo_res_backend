@@ -3,13 +3,14 @@ import jwt, { Secret } from 'jsonwebtoken';
 import User from '../user/user.model.js';
 import PendingUser from '../user/pendingUser.model.js';
 import ProfileChange from '../user/profileChange.model.js';
-import { sendEmail, getOTPTemplate } from '../../utils/sendEmail.js';
+import { sendEmail, getOTPTemplate, getPasswordResetTemplate } from '../../utils/sendEmail.js';
+import PasswordReset from '../user/passwordReset.model.js';
 import crypto from 'crypto';
 
 
 const generateAccessToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET as Secret, {
-    expiresIn: '15m',
+    expiresIn: '1d',
   });
 };
 
@@ -443,6 +444,109 @@ export const getMe = async (req: ExpressRequest, res: ExpressResponse, next: Nex
     res.status(200).json({
       success: true,
       user: req.user,
+    });
+  } catch (error: any) {
+    next(error);
+  }
+};
+
+// @desc    Forgot password — send OTP to email
+// @route   POST /api/v1/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide an email' });
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: 'If an account exists with this email, you will receive a password reset code.',
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    await PasswordReset.findOneAndUpdate(
+      { email: normalizedEmail },
+      { email: normalizedEmail, otp: otpHash, otpExpires: new Date(Date.now() + 10 * 60 * 1000) },
+      { upsert: true, new: true }
+    );
+
+    try {
+      await sendEmail({
+        email: normalizedEmail,
+        subject: 'Password Reset - PickFoo',
+        html: getPasswordResetTemplate(otp, user.name),
+      });
+    } catch (err) {
+      console.error('Password reset email failed:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send reset email. Please try again later.',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'If an account exists with this email, you will receive a password reset code.',
+    });
+  } catch (error: any) {
+    next(error);
+  }
+};
+
+// @desc    Reset password — verify OTP and set new password
+// @route   POST /api/v1/auth/reset-password
+// @access  Public
+export const resetPassword = async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
+  try {
+    const { email, otp, newPassword } = req.body as { email?: string; otp?: string; newPassword?: string };
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email, OTP, and new password',
+      });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters',
+      });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const otpHash = crypto.createHash('sha256').update(String(otp).trim()).digest('hex');
+
+    const resetRecord = await PasswordReset.findOne({
+      email: normalizedEmail,
+      otp: otpHash,
+      otpExpires: { $gt: new Date() },
+    });
+    if (!resetRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset code. Please request a new one.',
+      });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'User not found' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+    await PasswordReset.deleteOne({ _id: resetRecord._id });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password has been reset. You can now sign in with your new password.',
     });
   } catch (error: any) {
     next(error);
