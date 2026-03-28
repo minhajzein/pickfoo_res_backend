@@ -5,6 +5,8 @@ export interface IOrderItem {
   name: string;
   quantity: number;
   price: number;
+  /** Packing charge per unit at order time (0 if none). */
+  packingCharge: number;
 }
 
 export interface IOrder extends Document {
@@ -40,6 +42,7 @@ const orderSchema = new Schema<IOrder>(
         name: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 },
         price: { type: Number, required: true },
+        packingCharge: { type: Number, default: 0, min: 0 },
       },
     ],
     totalAmount: {

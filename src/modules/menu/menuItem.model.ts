@@ -17,6 +17,8 @@ export interface IMenuItem extends Document {
   isActive: boolean;
   ingredients: string[];
   restaurants: mongoose.Types.ObjectId[]; // Linked to multiple restaurants
+  /** Extra charge per unit for packaging (0 = not applicable). */
+  packingCharge: number;
 }
 
 const menuItemSchema = new Schema<IMenuItem>(
@@ -83,6 +85,11 @@ const menuItemSchema = new Schema<IMenuItem>(
         ref: 'Restaurant',
       },
     ],
+    packingCharge: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,
