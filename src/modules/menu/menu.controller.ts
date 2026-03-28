@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import MenuItem from './menuItem.model.js';
 import Restaurant from '../restaurant/restaurant.model.js';
+import {
+  getReviewStatsByMenuItemForOwner,
+  statsToReviewFields,
+} from '../review/reviewMenuItemStats.js';
 import { getPresignedUrl, deleteFileFromS3 } from '../../utils/s3.js';
 
 /**
@@ -53,9 +57,15 @@ export const createMenuItem = async (req: Request, res: Response, next: NextFunc
 export const getMyMenuItems = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const rawMenuItems = await MenuItem.find({ owner: req.user!._id }).populate('restaurants', 'name');
-    
+
+    const statsMap = await getReviewStatsByMenuItemForOwner(req.user!._id);
     const menuItems = await Promise.all(
-      rawMenuItems.map(item => presignMenuItem(item))
+      rawMenuItems.map(async (item) => {
+        const m = await presignMenuItem(item);
+        const id = String(m._id);
+        const { reviewAverage, reviewCount } = statsToReviewFields(statsMap.get(id));
+        return { ...m, reviewAverage, reviewCount };
+      })
     );
 
     res.status(200).json({
