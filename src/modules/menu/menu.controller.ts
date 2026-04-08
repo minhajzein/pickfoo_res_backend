@@ -39,6 +39,47 @@ export const createMenuItem = async (req: Request, res: Response, next: NextFunc
     req.body.owner = req.user!._id;
     applyVariantBasePrice(req.body);
 
+    // Enforce restaurant linking at creation time.
+    // Accept any of: restaurantId, restaurantIds[], restaurants[].
+    const singleRestaurantId =
+      typeof req.body?.restaurantId === 'string' && req.body.restaurantId.trim()
+        ? req.body.restaurantId.trim()
+        : null;
+    const listFromRestaurantIds = Array.isArray(req.body?.restaurantIds) ? req.body.restaurantIds : [];
+    const listFromRestaurants = Array.isArray(req.body?.restaurants) ? req.body.restaurants : [];
+
+    const normalizedRestaurantIds = [
+      ...(singleRestaurantId ? [singleRestaurantId] : []),
+      ...listFromRestaurantIds,
+      ...listFromRestaurants,
+    ]
+      .map((id: unknown) => String(id).trim())
+      .filter((id: string) => id.length > 0);
+
+    const uniqueRestaurantIds = [...new Set(normalizedRestaurantIds)];
+    if (uniqueRestaurantIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide at least one restaurant id',
+      });
+    }
+
+    const ownedRestaurants = await Restaurant.find({
+      _id: { $in: uniqueRestaurantIds },
+      owner: req.user!._id,
+    }).select('_id');
+
+    if (ownedRestaurants.length !== uniqueRestaurantIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more restaurants are invalid or not owned by you',
+      });
+    }
+
+    req.body.restaurants = uniqueRestaurantIds;
+    delete req.body.restaurantId;
+    delete req.body.restaurantIds;
+
     const menuItem = await MenuItem.create(req.body);
     const data = await presignMenuItem(menuItem);
 
@@ -157,6 +198,66 @@ export const updateMenuItem = async (req: Request, res: Response, next: NextFunc
       return res.status(401).json({ success: false, message: 'Not authorized' });
     }
     applyVariantBasePrice(req.body);
+
+    // If restaurant linkage is provided during update, validate ownership and keep it non-empty.
+    const hasRestaurantFields =
+      Object.prototype.hasOwnProperty.call(req.body, 'restaurantId') ||
+      Object.prototype.hasOwnProperty.call(req.body, 'restaurantIds') ||
+      Object.prototype.hasOwnProperty.call(req.body, 'restaurants');
+
+    if (hasRestaurantFields) {
+      const singleRestaurantId =
+        typeof req.body?.restaurantId === 'string' && req.body.restaurantId.trim()
+          ? req.body.restaurantId.trim()
+          : null;
+      const listFromRestaurantIds = Array.isArray(req.body?.restaurantIds) ? req.body.restaurantIds : [];
+      const listFromRestaurants = Array.isArray(req.body?.restaurants) ? req.body.restaurants : [];
+
+      const normalizedRestaurantIds = [
+        ...(singleRestaurantId ? [singleRestaurantId] : []),
+        ...listFromRestaurantIds,
+        ...listFromRestaurants,
+      ]
+        .map((id: unknown) => String(id).trim())
+        .filter((id: string) => id.length > 0);
+
+      const uniqueRestaurantIds = [...new Set(normalizedRestaurantIds)];
+      if (uniqueRestaurantIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide at least one restaurant id',
+        });
+      }
+
+      const ownedRestaurants = await Restaurant.find({
+        _id: { $in: uniqueRestaurantIds },
+        owner: req.user!._id,
+      }).select('_id');
+
+      if (ownedRestaurants.length !== uniqueRestaurantIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more restaurants are invalid or not owned by you',
+        });
+      }
+
+      req.body.restaurants = uniqueRestaurantIds;
+      delete req.body.restaurantId;
+      delete req.body.restaurantIds;
+    } else {
+      // App may send a plain menu update without restaurant fields.
+      // If this menu item has no linked restaurants, auto-link to owner's restaurants.
+      const existingRestaurantIds = Array.isArray(menuItem.restaurants)
+        ? menuItem.restaurants.map((id: any) => String(id))
+        : [];
+      if (existingRestaurantIds.length === 0) {
+        const ownerRestaurants = await Restaurant.find({ owner: req.user!._id }).select('_id');
+        const ownerRestaurantIds = ownerRestaurants.map((r) => String(r._id));
+        if (ownerRestaurantIds.length > 0) {
+          req.body.restaurants = ownerRestaurantIds;
+        }
+      }
+    }
 
     menuItem = await MenuItem.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
